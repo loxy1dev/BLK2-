@@ -1,0 +1,1 @@
+import {Suspense} from 'react';import LoginClient from './LoginClient';export default function LoginPage(){return <Suspense fallback={<main className="container"><section className="game-panel auth-card"><h1>Connexion</h1><p className="muted">Chargement…</p></section></main>}><LoginClient/></Suspense>}

@@ -1,0 +1,6 @@
+import crypto from 'node:crypto';
+const secret=()=>{const s=process.env.SHOP_KEY_SECRET;if(!s)throw new Error('SHOP_KEY_SECRET is not configured');return s;};
+const b64=(s:string)=>Buffer.from(s).toString('base64url');
+const unb64=(s:string)=>Buffer.from(s,'base64url').toString('utf8');
+export function createShopKey(productId:string,requestId=crypto.randomUUID()){const payload=JSON.stringify({p:productId,t:Date.now(),r:requestId});const body=b64(payload);const sig=crypto.createHmac('sha256',secret()).update(body).digest('base64url');return `BLOX-${body}-${sig}`;}
+export function verifyShopKey(key:string){const normalized=String(key||'').trim();const parts=normalized.split('-');if(parts.length!==3||parts[0]!=='BLOX')return {valid:false as const};const body=parts[1],signature=parts[2],expected=crypto.createHmac('sha256',secret()).update(body).digest('base64url');if(signature.length!==expected.length||!crypto.timingSafeEqual(Buffer.from(signature),Buffer.from(expected)))return {valid:false as const};try{const data=JSON.parse(unb64(body));if(!data?.p||!data?.t||!data?.r)return {valid:false as const};return {valid:true as const,productId:String(data.p),issuedAt:Number(data.t),requestId:String(data.r)};}catch{return {valid:false as const};}}

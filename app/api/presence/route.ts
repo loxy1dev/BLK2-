@@ -1,0 +1,4 @@
+import {Redis} from '@upstash/redis'; import {NextResponse} from 'next/server'; import {getSession} from '@/lib/auth';
+export const runtime='nodejs'; const redis=new Redis({url:process.env.UPSTASH_REDIS_REST_URL!,token:process.env.UPSTASH_REDIS_REST_TOKEN!}); const KEY='blox:presence';
+export async function POST(req:Request){const s=await getSession(req);if(!s)return NextResponse.json({ok:false},{status:401});await redis.zadd(KEY,{score:Date.now(),member:s.user.id});return NextResponse.json({ok:true});}
+export async function GET(){const cutoff=Date.now()-45000;await redis.zremrangebyscore(KEY,0,cutoff);const ids=await redis.zrange(KEY,0,-1) as string[];const users=[] as {id:string;username:string}[];for(const id of ids.slice(-30)){const u=await redis.get<{username:string}>(`blox:user:${id}`);if(u)users.push({id,username:u.username});}return NextResponse.json({count:users.length,users});}

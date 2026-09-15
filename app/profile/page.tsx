@@ -1,0 +1,1 @@
+'use client';import {ProfileHub} from '@/components/ProfileHub';export default function ProfilePage(){return <main className="profile-route"><div className="container"><ProfileHub standalone/></div></main>}

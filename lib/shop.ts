@@ -1,0 +1,2 @@
+export const SHOP_PRODUCTS={hotmail:{id:'hotmail',name:'Hotmail',price:100000,accent:'#0078d4',icon:'✉'},crunchyroll:{id:'crunchyroll',name:'Crunchyroll',price:300000,accent:'#f47521',icon:'C'},deezer:{id:'deezer',name:'Deezer',price:500000,accent:'#a238ff',icon:'D'},netflix:{id:'netflix',name:'Netflix',price:800000,accent:'#e50914',icon:'N'},steam:{id:'steam',name:'Steam',price:2000000,accent:'#1b2838',icon:'S'}} as const;
+export type ProductId=keyof typeof SHOP_PRODUCTS;
