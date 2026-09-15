@@ -1,0 +1,2 @@
+import {NextResponse} from 'next/server'; import {getSession} from '@/lib/auth'; import {claimDaily} from '@/lib/progression';
+export const runtime='nodejs'; export async function POST(req:Request){const s=await getSession(req);if(!s)return NextResponse.json({error:'Connexion requise.'},{status:401});const r=await claimDaily(s.user.id,s.user.username,s.user.createdAt);return r.ok?NextResponse.json(r):NextResponse.json({error:'Récompense déjà réclamée aujourd’hui.'},{status:409});}
