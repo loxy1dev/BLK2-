@@ -23,13 +23,16 @@ const hashPassword = (password: string) => {
 
 const verifyPassword = (password: string, stored: string) => {
   try {
-    const [saltText, hashText] = String(stored || '').split('.');
+    const value = String(stored || '');
+    // Compatibility with accounts created by older builds that stored the password directly.
+    if (!value.includes('.')) return value === password;
+    const [saltText, hashText] = value.split('.');
     if (!saltText || !hashText) return false;
     const salt = Buffer.from(saltText, 'base64url');
     const expected = Buffer.from(hashText, 'base64url');
     if (!salt.length || !expected.length) return false;
     const actual = crypto.scryptSync(password, salt, expected.length);
-    return crypto.timingSafeEqual(expected, actual);
+    return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
   } catch {
     return false;
   }
@@ -74,12 +77,21 @@ export async function register(username: string, password: string) {
 
 export async function login(username: string, password: string) {
   const clean = cleanUsername(username);
+  if (clean.length < 3 || !password) throw new Error('Pseudo ou mot de passe incorrect.');
   const id = await redis.get<string>(keyUsername(clean));
   if (!id) throw new Error('Pseudo ou mot de passe incorrect.');
 
   const user = await redis.get<User>(USER_PREFIX + id);
-  if (!user || !verifyPassword(password, user.passwordHash)) {
+  if (!user) throw new Error('Compte introuvable. Recrée le compte avec ce pseudo.');
+
+  if (!verifyPassword(password, user.passwordHash)) {
     throw new Error('Pseudo ou mot de passe incorrect.');
+  }
+
+  // Upgrade old plaintext accounts to the current salted hash after a successful login.
+  if (!String(user.passwordHash).includes('.')) {
+    const upgraded = {...user, passwordHash: hashPassword(password)};
+    await redis.set(USER_PREFIX + id, upgraded);
   }
 
   const token = `${crypto.randomUUID()}${crypto.randomBytes(24).toString('hex')}`;
@@ -89,25 +101,14 @@ export async function login(username: string, password: string) {
 
 export async function getSession(req: Request) {
   const rawCookie = req.headers.get('cookie') || '';
-  const cookie = rawCookie
-    .split(';')
-    .map(part => part.trim())
-    .find(part => part.startsWith(`${SESSION_COOKIE}=`));
-
+  const cookie = rawCookie.split(';').map(part => part.trim()).find(part => part.startsWith(`${SESSION_COOKIE}=`));
   if (!cookie) return null;
-
   const rawToken = cookie.slice(SESSION_COOKIE.length + 1);
   let token = rawToken;
-  try {
-    token = decodeURIComponent(rawToken);
-  } catch {
-    // Keep the raw token when a client sends a non-encoded value.
-  }
+  try { token = decodeURIComponent(rawToken); } catch {}
   if (!token) return null;
-
   const id = await redis.get<string>(SESSION_PREFIX + token);
   if (!id) return null;
-
   const user = await redis.get<User>(USER_PREFIX + id);
   return user ? { user, token } : null;
 }
