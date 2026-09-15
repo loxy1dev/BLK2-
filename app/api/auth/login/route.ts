@@ -1,6 +1,7 @@
 import {NextResponse} from 'next/server';
 import {login,sessionCookie} from '@/lib/auth';
 export const runtime='nodejs';
+export const dynamic='force-dynamic';
 export async function POST(req:Request){
  try{
   const body=await req.json().catch(()=>({}));
@@ -12,6 +13,8 @@ export async function POST(req:Request){
   r.headers.set('Set-Cookie',sessionCookie(token));
   return r;
  }catch(e){
-  return NextResponse.json({error:e instanceof Error?e.message:'Connexion impossible.'},{status:401});
+  const message=e instanceof Error?e.message:'Connexion impossible.';
+  const status=message==='Pseudo ou mot de passe incorrect.'?401:500;
+  return NextResponse.json({error:message},{status});
  }
 }
