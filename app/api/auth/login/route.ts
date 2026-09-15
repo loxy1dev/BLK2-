@@ -1,0 +1,2 @@
+import {NextResponse} from 'next/server';import {login,sessionCookie} from '@/lib/auth';
+export async function POST(req:Request){try{const b=await req.json();const {user,token}=await login(b.username,b.password);const r=NextResponse.json({user:{id:user.id,username:user.username}});r.headers.set('Set-Cookie',sessionCookie(token));return r;}catch(e){return NextResponse.json({error:e instanceof Error?e.message:'Connexion impossible.'},{status:401});}}
