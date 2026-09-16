@@ -1,78 +1,14 @@
 'use client';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {addCoins,beginGame,endGame,getCoins,recordGameResult,spendCoins} from '@/lib/wallet';
-
 type Candle={price:number;time:number};
-const prefixes=['Nova','Astra','Volt','Lunar','Pixel','Quantum','Neon','Orbit','Vanta','Flux','Hyper','Meta','Solar','Frost','Echo','Titan'];
-const suffixes=['Chain','Labs','Coin','Protocol','X','Finance','Core','Net','AI','Swap','Verse','Pay'];
-const symbols=['NVX','AST','VLT','LNR','PXL','QTM','NEX','ORB','VNT','FLX','HYP','MTA','SLR','FRS','ECO','TTN'];
-const randomCoin=()=>{
- const name=`${prefixes[Math.floor(Math.random()*prefixes.length)]} ${suffixes[Math.floor(Math.random()*suffixes.length)]}`;
- const symbol=symbols[Math.floor(Math.random()*symbols.length)]+Math.floor(10+Math.random()*90);
- const price=Math.round((40+Math.random()*160)*100)/100;
- return {name,symbol,price};
-};
+const prefixes=['Nova','Astra','Volt','Lunar','Pixel','Quantum','Neon','Orbit','Vanta','Flux','Hyper','Meta','Solar','Frost','Echo','Titan'],suffixes=['Chain','Labs','Coin','Protocol','X','Finance','Core','Net','AI','Swap','Verse','Pay'],symbols=['NVX','AST','VLT','LNR','PXL','QTM','NEX','ORB','VNT','FLX','HYP','MTA','SLR','FRS','ECO','TTN'];
+const randomCoin=()=>({name:`${prefixes[Math.floor(Math.random()*prefixes.length)]} ${suffixes[Math.floor(Math.random()*suffixes.length)]}`,symbol:symbols[Math.floor(Math.random()*symbols.length)]+Math.floor(10+Math.random()*90),price:Math.round((40+Math.random()*160)*100)/100});
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
-
-export function CryptoTrader(){
- const [coins,setCoins]=useState(0),[coin,setCoin]=useState(()=>randomCoin()),[price,setPrice]=useState(100),[history,setHistory]=useState<Candle[]>([]),[bet,setBet]=useState(100),[position,setPosition]=useState<null|{stake:number;buyPrice:number}>(null),[message,setMessage]=useState('Le marché est ouvert — choisis ton point d’entrée.'),[flash,setFlash]=useState<'up'|'down'|null>(null),[round,setRound]=useState(0),[peak,setPeak]=useState(100),[volume,setVolume]=useState(0);
- const priceRef=useRef(100); const timerRef=useRef<number|null>(null); const volatilityRef=useRef(0);
- useEffect(()=>{setCoins(getCoins())},[]);
- const resetMarket=useCallback(()=>{
-  const c=randomCoin(); const start=clamp(c.price,45,180); const initial=Array.from({length:42},(_,i)=>({price:start*(0.96+Math.sin(i/4)*0.018),time:i}));
-  priceRef.current=start; volatilityRef.current=0; setCoin(c);setPrice(start);setHistory(initial);setPeak(start);setVolume(Math.floor(120+Math.random()*880));setPosition(null);setMessage('Nouveau marché créé. Entre quand tu veux.');setFlash(null);setRound(r=>r+1);
- },[]);
- useEffect(()=>{resetMarket()},[resetMarket]);
- useEffect(()=>{
-  timerRef.current=window.setInterval(()=>{
-   const p=priceRef.current; const shock=Math.random();
-   if(shock<0.018) volatilityRef.current+=(Math.random()<0.5?-1:1)*(0.35+Math.random()*0.9);
-   volatilityRef.current*=0.91;
-   let move=(Math.random()-0.5)*0.055+volatilityRef.current*0.018;
-   if(Math.random()<0.035) move+=(Math.random()-0.5)*0.7;
-   if(Math.random()<0.012) move+=(Math.random()<0.5?-1:1)*(0.55+Math.random()*1.2);
-   let next=p*(1+move);
-   if(Math.random()<0.004) next=p*Math.random()*0.035;
-   next=clamp(next,0.01,9999);
-   priceRef.current=next;setPrice(next);setPeak(v=>Math.max(v,next));setVolume(Math.floor(100+Math.random()*1200));setFlash(next>=p?'up':'down');
-   setHistory(h=>[...h.slice(-79),{price:next,time:Date.now()}]);
-   if(position && next<=0.01){
-    const loss=position.stake; setPosition(null);endGame();recordGameResult('crypto','loss',loss);setCoins(getCoins());setMessage(`💥 ${coin.symbol} s'est effondré à presque 0 — -${loss.toLocaleString('fr-FR')} coins`);window.setTimeout(resetMarket,1200);
-   }
-  },650);
-  return()=>{if(timerRef.current)window.clearInterval(timerRef.current)};
- },[position,coin.symbol,resetMarket]);
- const min=Math.min(...history.map(x=>x.price),price),max=Math.max(...history.map(x=>x.price),price);
- const path=useMemo(()=>{if(history.length<2)return '';const w=1000,h=330,pad=18;return history.map((c,i)=>{const x=pad+(i/(history.length-1))*(w-pad*2);const y=h-pad-((c.price-min)/(Math.max(0.0001,max-min)))*(h-pad*2);return `${i?'L':'M'} ${x.toFixed(1)} ${y.toFixed(1)}`}).join(' ')},[history,min,max]);
- const change=position?((price/position.buyPrice)-1)*100:((price/(history[0]?.price||price))-1)*100;
- const buy=()=>{if(position||bet<=0)return;if(!spendCoins(bet)){setMessage('Pas assez de coins pour entrer sur ce marché.');return}beginGame();setCoins(getCoins());setPosition({stake:bet,buyPrice:price});setMessage(`🟢 ACHAT ${coin.symbol} à ${price.toFixed(2)} — surveille le marché.`)};
- const sell=()=>{if(!position)return;const payout=Math.max(0,Math.round(position.stake*(price/position.buyPrice)));const net=payout-position.stake;addCoins(payout);setCoins(getCoins());setPosition(null);endGame();recordGameResult('crypto',net>=0?'win':'loss',Math.abs(net));setMessage(`${net>=0?'🟢 Vente exécutée':'🔴 Vente à perte'} à ${price.toFixed(2)} → ${net>=0?'+':''}${net.toLocaleString('fr-FR')} coins`);window.setTimeout(resetMarket,900)};
- const visiblePrice=price<1?price.toFixed(3):price.toFixed(2);
- return <div className="game-panel" style={{overflow:'hidden'}}>
-  <div className="game-header"><div><span className="eyebrow">BLOX MARKETS</span><h2>📈 Crypto Trader</h2><p>Achète à un instant précis, regarde le marché évoluer, puis revends quand tu veux.</p></div><div className="balance-badge">🪙 {coins.toLocaleString('fr-FR')}</div></div>
-  <div style={{display:'grid',gap:14}}>
-   <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:12,alignItems:'center',padding:14,borderRadius:16,background:'rgba(255,255,255,.045)',border:'1px solid rgba(255,255,255,.08)'}}>
-    <div><div style={{fontSize:12,fontWeight:900,opacity:.55}}>MARKET #{round.toString().padStart(3,'0')}</div><div style={{fontSize:25,fontWeight:1000}}>{coin.name} <span style={{fontSize:14,opacity:.5}}>${coin.symbol}</span></div></div>
-    <div style={{textAlign:'right'}}><div style={{fontSize:30,fontWeight:1000}}>{visiblePrice} <span style={{fontSize:13,opacity:.5}}>COINS</span></div><div style={{fontWeight:900,fontSize:13}} className={flash==='up'?'text-up':'text-down'}>{change>=0?'+':''}{change.toFixed(2)}%</div></div>
-   </div>
-   <div style={{position:'relative',height:340,borderRadius:18,overflow:'hidden',background:'linear-gradient(180deg,rgba(15,23,42,.96),rgba(8,12,24,.98))',border:'1px solid rgba(255,255,255,.09)'}}>
-    <div style={{position:'absolute',inset:0,backgroundImage:'linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px)',backgroundSize:'55px 55px'}}/>
-    <svg viewBox="0 0 1000 330" preserveAspectRatio="none" style={{position:'absolute',inset:0,width:'100%',height:'100%'}}>
-      <path d={path} fill="none" stroke="currentColor" strokeWidth="5" vectorEffect="non-scaling-stroke" style={{color:flash==='down'?'#ff6b81':'#6ee7ff',filter:'drop-shadow(0 0 7px currentColor)'}}/>
-    </svg>
-    <div style={{position:'absolute',left:14,top:12,fontSize:11,fontWeight:900,opacity:.45}}>LIVE PRICE · 650ms</div>
-    <div style={{position:'absolute',right:14,top:12,fontSize:11,fontWeight:900,opacity:.45}}>VOL {volume.toLocaleString('fr-FR')}</div>
-    <div style={{position:'absolute',left:14,bottom:12,fontSize:11,fontWeight:900,opacity:.45}}>LOW {min<1?min.toFixed(3):min.toFixed(2)}</div>
-    <div style={{position:'absolute',right:14,bottom:12,fontSize:11,fontWeight:900,opacity:.45}}>HIGH {max.toFixed(2)}</div>
-    {position&&<div style={{position:'absolute',left:18,top:48,padding:'7px 10px',borderRadius:9,background:'rgba(110,231,255,.12)',border:'1px solid rgba(110,231,255,.25)',fontSize:12,fontWeight:900}}>ENTRY {position.buyPrice.toFixed(2)} · {position.stake} 🪙</div>}
-   </div>
-   <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>{[100,250,500,1000].map(v=><button key={v} className={bet===v?'primary':''} onClick={()=>!position&&setBet(v)}>{v} 🪙</button>)}</div>
-   <div style={{display:'grid',gridTemplateColumns:position?'1fr':'1fr',gap:10}}>
-    {!position?<button className="primary" onClick={buy}>🟢 ACHETER · {bet} 🪙</button>:<button className="primary" onClick={sell}>🔴 REVENDRE · {price<position.buyPrice?'PERTE':'PROFIT'} · {Math.max(0,Math.round(position.stake*(price/position.buyPrice))).toLocaleString('fr-FR')} 🪙</button>}
-   </div>
-   <div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap',fontSize:12,fontWeight:900,opacity:.7}}><span>📊 Pic de la partie: {peak.toFixed(2)}</span><span>{position?'POSITION OUVERTE — tu peux vendre maintenant':'Aucune position — tu peux acheter maintenant'}</span></div>
-   <div style={{minHeight:25,textAlign:'center',fontWeight:900}}>{message}</div>
-   <div style={{fontSize:11,textAlign:'center',opacity:.45}}>Marché fictif et coins virtuels. Chaque vente termine la partie et génère automatiquement une nouvelle crypto.</div>
-  </div>
- </div>;
+export function CryptoTrader(){const [coins,setCoins]=useState(0),[coin,setCoin]=useState(()=>randomCoin()),[price,setPrice]=useState(100),[history,setHistory]=useState<Candle[]>([]),[bet,setBet]=useState(100),[position,setPosition]=useState<null|{stake:number;buyPrice:number}>(null),[message,setMessage]=useState('Le marché est ouvert — choisis ton point d’entrée.'),[flash,setFlash]=useState<'up'|'down'|null>(null),[round,setRound]=useState(0),[peak,setPeak]=useState(100),[volume,setVolume]=useState(0);const priceRef=useRef(100),timerRef=useRef<number|null>(null),volatilityRef=useRef(0);
+ useEffect(()=>{setCoins(getCoins())},[]);const resetMarket=useCallback(()=>{const c=randomCoin(),start=clamp(c.price,45,180),initial=Array.from({length:42},(_,i)=>({price:start*(0.96+Math.sin(i/4)*.018),time:i}));priceRef.current=start;volatilityRef.current=0;setCoin(c);setPrice(start);setHistory(initial);setPeak(start);setVolume(Math.floor(120+Math.random()*880));setPosition(null);setMessage('Nouveau marché créé. Entre quand tu veux.');setFlash(null);setRound(r=>r+1)},[]);useEffect(()=>{resetMarket()},[resetMarket]);
+ useEffect(()=>{timerRef.current=window.setInterval(()=>{const p=priceRef.current,shock=Math.random();if(shock<.018)volatilityRef.current+=(Math.random()<.5?-1:1)*(.35+Math.random()*.9);volatilityRef.current*=.91;let move=(Math.random()-.5)*.055+volatilityRef.current*.018;if(Math.random()<.035)move+=(Math.random()-.5)*.7;if(Math.random()<.012)move+=(Math.random()<.5?-1:1)*(.55+Math.random()*1.2);let next=p*(1+move);if(Math.random()<.004)next=p*Math.random()*.035;next=clamp(next,.01,9999);priceRef.current=next;setPrice(next);setPeak(v=>Math.max(v,next));setVolume(Math.floor(100+Math.random()*1200));setFlash(next>=p?'up':'down');setHistory(h=>[...h.slice(-79),{price:next,time:Date.now()}]);if(position&&next<=.01){const loss=position.stake;setPosition(null);endGame();recordGameResult('crypto','loss',loss);setCoins(getCoins());setMessage(`💥 ${coin.symbol} s'est effondré à presque 0 — -${loss.toLocaleString('fr-FR')} coins`);window.setTimeout(resetMarket,1200)}},650);return()=>{if(timerRef.current)window.clearInterval(timerRef.current)}},[position,coin.symbol,resetMarket]);
+ const min=Math.min(...history.map(x=>x.price),price),max=Math.max(...history.map(x=>x.price),price),path=useMemo(()=>{if(history.length<2)return '';const w=1000,h=330,pad=18;return history.map((c,i)=>{const x=pad+(i/(history.length-1))*(w-pad*2),y=h-pad-((c.price-min)/(Math.max(.0001,max-min)))*(h-pad*2);return`${i?'L':'M'} ${x.toFixed(1)} ${y.toFixed(1)}`}).join(' ')},[history,min,max]);
+ const change=position?((price/position.buyPrice)-1)*100:((price/(history[0]?.price||price))-1)*100;const buy=()=>{if(position||bet<=0)return;if(!spendCoins(bet)){setMessage('Pas assez de coins pour entrer sur ce marché.');return}beginGame();setCoins(getCoins());setPosition({stake:bet,buyPrice:price});setMessage(`🟢 ACHAT ${coin.symbol} à ${price.toFixed(2)} — surveille le marché.`)};const sell=()=>{if(!position)return;const payout=Math.max(0,Math.round(position.stake*(price/position.buyPrice))),net=payout-position.stake;addCoins(payout);setCoins(getCoins());setPosition(null);endGame();recordGameResult('crypto',net>=0?'win':'loss',Math.abs(net));setMessage(`${net>=0?'🟢 Vente exécutée':'🔴 Vente à perte'} à ${price.toFixed(2)} → ${net>=0?'+':''}${net.toLocaleString('fr-FR')} coins`);window.setTimeout(resetMarket,900)};const visiblePrice=price<1?price.toFixed(3):price.toFixed(2);
+ return <div className="game-panel" style={{overflow:'hidden'}}><div className="game-header"><div><span className="eyebrow">BLOX MARKETS</span><h2>📈 Crypto Trader</h2><p>Achète à un instant précis, regarde le marché évoluer, puis revends quand tu veux.</p></div><div className="balance-badge">🪙 {coins.toLocaleString('fr-FR')}</div></div><div style={{display:'grid',gap:14}}><div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:12,alignItems:'center',padding:14,borderRadius:16,background:'rgba(255,255,255,.045)',border:'1px solid rgba(255,255,255,.08)'}}><div><div style={{fontSize:12,fontWeight:900,opacity:.55}}>MARKET #{round.toString().padStart(3,'0')}</div><div style={{fontSize:25,fontWeight:1000}}>{coin.name} <span style={{fontSize:14,opacity:.5}}>${coin.symbol}</span></div></div><div style={{textAlign:'right'}}><div style={{fontSize:30,fontWeight:1000}}>{visiblePrice} <span style={{fontSize:13,opacity:.5}}>COINS</span></div><div style={{fontWeight:900,fontSize:13}} className={flash==='up'?'text-up':'text-down'}>{change>=0?'+':''}{change.toFixed(2)}%</div></div></div><div style={{position:'relative',height:340,borderRadius:18,overflow:'hidden',background:'linear-gradient(180deg,rgba(15,23,42,.96),rgba(8,12,24,.98))',border:'1px solid rgba(255,255,255,.09)'}}><div style={{position:'absolute',inset:0,backgroundImage:'linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px)',backgroundSize:'55px 55px'}}/><svg viewBox="0 0 1000 330" preserveAspectRatio="none" style={{position:'absolute',inset:0,width:'100%',height:'100%'}}><path d={path} fill="none" stroke="currentColor" strokeWidth="5" vectorEffect="non-scaling-stroke" style={{color:flash==='down'?'#ff6b81':'#6ee7ff',filter:'drop-shadow(0 0 7px currentColor)'}}/></svg><div style={{position:'absolute',left:14,top:12,fontSize:11,fontWeight:900,opacity:.45}}>LIVE PRICE · 650ms</div><div style={{position:'absolute',right:14,top:12,fontSize:11,fontWeight:900,opacity:.45}}>VOL {volume.toLocaleString('fr-FR')}</div><div style={{position:'absolute',left:14,bottom:12,fontSize:11,fontWeight:900,opacity:.45}}>LOW {min<1?min.toFixed(3):min.toFixed(2)}</div><div style={{position:'absolute',right:14,bottom:12,fontSize:11,fontWeight:900,opacity:.45}}>HIGH {max.toFixed(2)}</div>{position&&<div style={{position:'absolute',left:18,top:48,padding:'7px 10px',borderRadius:9,background:'rgba(110,231,255,.12)',border:'1px solid rgba(110,231,255,.25)',fontSize:12,fontWeight:900}}>ENTRY {position.buyPrice.toFixed(2)} · {position.stake} 🪙</div>}</div><div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:8,alignItems:'stretch'}}><div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>{[100,250,500,1000].map(v=><button key={v} className={bet===v?'primary':''} onClick={()=>!position&&setBet(v)}>{v} 🪙</button>)}</div><button className={`maxbtn ${bet===coins?'active':''}`} onClick={()=>setBet(getCoins())} disabled={Boolean(position)||coins<10}>MAX</button></div><div style={{display:'grid',gridTemplateColumns:'1fr',gap:10}}>{!position?<button className="primary" onClick={buy}>🟢 ACHETER · {bet.toLocaleString('fr-FR')} 🪙</button>:<button className="primary" onClick={sell}>🔴 REVENDRE · {price<position.buyPrice?'PERTE':'PROFIT'} · {Math.max(0,Math.round(position.stake*(price/position.buyPrice))).toLocaleString('fr-FR')} 🪙</button>}</div><div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap',fontSize:12,fontWeight:900,opacity:.7}}><span>📊 Pic de la partie: {peak.toFixed(2)}</span><span>{position?'POSITION OUVERTE — tu peux vendre maintenant':'Aucune position — tu peux acheter maintenant'}</span></div><div style={{minHeight:25,textAlign:'center',fontWeight:900}}>{message}</div><div style={{fontSize:11,textAlign:'center',opacity:.45}}>Marché fictif et coins virtuels. Chaque vente termine la partie et génère automatiquement une nouvelle crypto.</div></div></div>;
 }
