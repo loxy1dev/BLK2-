@@ -12,10 +12,10 @@ export function TrainCash(){
  const start=()=>{
   if(running||bet<=0)return;
   if(!spendCoins(bet)){setMsg('Pas assez de coins.');return}
-  beginGame('traincash');setCoins(getCoins());setStep(0);setCrashed(false);setCashed(false);setMsg('Le train part… cash out avant le crash !');setTrainX(8);setRunning(true);
+  beginGame();setCoins(getCoins());setStep(0);setCrashed(false);setCashed(false);setMsg('Le train part… cash out avant le crash !');setTrainX(8);setRunning(true);
  };
  const crash=()=>{
-  setRunning(false);setCrashed(true);endGame();recordGameResult('traincash',0);
+  setRunning(false);setCrashed(true);endGame();recordGameResult('traincash','loss',bet);
   setMsg(`💥 Crash à ×${mult.toFixed(2)} — -${bet.toLocaleString('fr-FR')} coins`);
   window.setTimeout(()=>{setCrashed(false);setStep(0);setTrainX(8)},1800);
  };
@@ -30,7 +30,7 @@ export function TrainCash(){
  const cashout=()=>{
   if(!running||step<1)return;
   const payout=Math.round(bet*mult);
-  addCoins(payout);setCoins(getCoins());setRunning(false);setCashed(true);endGame();recordGameResult('traincash',payout);
+  addCoins(payout);setCoins(getCoins());setRunning(false);setCashed(true);endGame();recordGameResult('traincash','win',payout);
   setMsg(`💰 Cash out ×${mult.toFixed(2)} → +${(payout-bet).toLocaleString('fr-FR')} coins`);
   window.setTimeout(()=>setCashed(false),1800);
  };
