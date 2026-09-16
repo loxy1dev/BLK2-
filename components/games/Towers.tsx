@@ -1,126 +1,39 @@
 'use client';
-import {useMemo,useState} from 'react';
+import {useEffect,useState} from 'react';
 import {addCoins,beginGame,endGame,getCoins,recordGameResult,spendCoins} from '@/lib/wallet';
 
-const mults=[1.05,1.12,1.22,1.35,1.5,1.68,1.88,2.1,2.4,2.8];
-const floors=10;
+const mults=[1.05,1.12,1.22,1.35,1.5,1.68,1.88,2.1,2.4,2.8,3.4,4.2];
+const floors=12;
+
+type Block={x:number;width:number};
 
 export function Towers(){
-  const [bet,setBet]=useState(100),[started,setStarted]=useState(false),[row,setRow]=useState(0);
-  const [revealed,setRevealed]=useState<Record<number,number>>({});
-  const [bombs,setBombs]=useState<number[]>([]);
-  const [msg,setMsg]=useState('Choisis une porte à chaque maison.');
-  const [flash,setFlash]=useState<'safe'|'boom'|null>(null);
-  const [round,setRound]=useState(0);
-
-  const start=()=>{
-    const b=Math.floor(Number(bet));
-    if(!Number.isFinite(b)||b<10){setMsg('Mise minimum : 10 coins.');return;}
-    if(!spendCoins(b)){setMsg('Coins insuffisants.');return;}
-    beginGame();
-    setBombs(Array.from({length:floors},()=>Math.floor(Math.random()*3)));
-    setRevealed({});setRow(0);setStarted(true);setFlash(null);setRound(v=>v+1);
-    setMsg('La première maison t’attend… choisis une porte.');
-  };
-
-  const pick=(choice:number)=>{
-    if(!started)return;
-    setRevealed(v=>({...v,[row]:choice}));
-    if(choice===bombs[row]){
-      setFlash('boom');
-      recordGameResult('Towers','loss',-bet);setStarted(false);endGame();
-      setMsg('💥 Mauvaise maison ! La tour s’effondre.');
-      return;
-    }
-    setFlash('safe');
-    if(row===floors-1){
-      const payout=Math.floor(bet*mults[floors-1]);
-      addCoins(payout);recordGameResult('Towers','win',payout-bet);setStarted(false);endGame();
-      setMsg(`🏆 Sommet atteint ! +${payout.toLocaleString('fr-FR')} coins`);return;
-    }
-    setRow(row+1);setMsg(`✓ Maison sécurisée · multiplicateur ${mults[row].toFixed(2)}x`);
-  };
-
-  const cash=()=>{
-    if(!started)return;
-    const m=row===0?1:mults[row-1];const payout=Math.floor(bet*m);
-    addCoins(payout);recordGameResult('Towers','win',payout-bet);setStarted(false);endGame();setFlash('safe');
-    setMsg(`🎉 Gain sécurisé : +${payout.toLocaleString('fr-FR')} coins`);
-  };
-
-  const currentMult=useMemo(()=>row===0?1:mults[row-1],[row]);
-
-  return <div className="game-panel towers-game">
-    <div className="game-head">
-      <div><h2>🏠 Towers</h2><p className="muted">Monte de maison en maison. Une porte est piégée à chaque étage.</p></div>
-      <div className="mult">{started?`Étage ${row+1}/${floors} · ×${currentMult.toFixed(2)}`:'10 maisons'}</div>
-    </div>
-
-    <div className="tower-stage">
-      <div className={`tower-sky ${flash==='boom'?'sky-boom':''}`}>
-        <span className="cloud c1">☁</span><span className="cloud c2">☁</span><span className="moon">✦</span>
-      </div>
-      <div className="tower-building">
-        {Array.from({length:floors},(_,r)=>{
-          const active=started&&r===row;
-          const picked=revealed[r];
-          const safe=picked!==undefined&&picked!==bombs[r];
-          const boom=picked!==undefined&&picked===bombs[r];
-          return <div className={`house-floor ${r===row?'current-floor':''} ${r<row?'passed-floor':''}`} key={`${round}-${r}`}>
-            <div className="floor-number">{r+1}</div>
-            <div className="house-roof"><span>⌂</span></div>
-            <div className="house-wall">
-              {[0,1,2].map(i=><button key={i}
-                disabled={!active}
-                className={`house-door ${picked===i?'picked':''} ${picked===i&&safe?'door-safe':''} ${picked===i&&boom?'door-boom':''}`}
-                onClick={()=>pick(i)}
-              >
-                <span className="door-window">{picked===i?(safe?'✓':'💥'):'?'}</span>
-                <span className="door-knob"/>
-              </button>)}
-            </div>
-            <div className="house-ground"/>
-          </div>;
-        })}
-      </div>
-      {flash==='boom'&&<div className="tower-result boom-result">💥 BOOM</div>}
-      {!started&&flash!=='boom'&&<div className="tower-result idle-result">🏠 PRÊT À MONTER</div>}
-    </div>
-
-    <div className="tower-controls">
-      <div className="betbar">
-        <input className="field" type="number" min="10" value={bet} onChange={e=>setBet(Number(e.target.value))} disabled={started}/>
-        <button className="maxbtn" onClick={()=>setBet(getCoins())} disabled={started||getCoins()<10}>MAX</button>
-        {!started?<button className="playbtn" onClick={start} disabled={getCoins()<10}>🏠 Commencer</button>:<button className="cashbtn" onClick={cash}>💰 Encaisser ×{currentMult.toFixed(2)}</button>}
-      </div>
-      <div className="tower-steps">{mults.map((m,i)=><span key={m} className={i<row?'step-done':i===row&&started?'step-current':''}>×{m.toFixed(2)}</span>)}</div>
-    </div>
-    <p className="muted">{msg}</p>
-
-    <style jsx>{`
-      .towers-game{overflow:hidden}
-      .tower-stage{position:relative;height:590px;margin:18px 0;border-radius:24px;overflow:hidden;background:linear-gradient(180deg,#10152d 0%,#1a2350 48%,#30233d 100%);border:1px solid rgba(255,255,255,.1);box-shadow:inset 0 0 60px rgba(0,0,0,.35)}
-      .tower-sky{position:absolute;inset:0;overflow:hidden;background:radial-gradient(circle at 78% 14%,rgba(255,255,255,.12),transparent 4%),linear-gradient(180deg,rgba(91,107,190,.15),transparent 55%);transition:.3s}
-      .sky-boom{animation:skyshake .45s ease-in-out}
-      .cloud{position:absolute;font-size:48px;opacity:.12;animation:cloud 13s linear infinite}
-      .c1{top:38px;left:9%}.c2{top:110px;right:12%;animation-delay:-6s}.moon{position:absolute;right:8%;top:32px;font-size:34px;color:#fff;opacity:.7;animation:twinkle 1.8s ease-in-out infinite}
-      .tower-building{position:absolute;bottom:0;left:50%;width:min(760px,94%);height:555px;transform:translateX(-50%);display:flex;flex-direction:column-reverse;justify-content:flex-start;gap:2px}
-      .house-floor{position:relative;height:54px;flex:1;min-height:50px;transform-origin:center bottom;transition:.35s;filter:drop-shadow(0 5px 5px rgba(0,0,0,.3))}
-      .current-floor{animation:pulsehouse 1.2s ease-in-out infinite}
-      .passed-floor{filter:drop-shadow(0 3px 4px rgba(0,0,0,.25))}
-      .floor-number{position:absolute;left:-3px;top:17px;width:26px;height:22px;border-radius:7px;background:rgba(0,0,0,.35);color:#fff;font-size:11px;display:grid;place-items:center;z-index:4}
-      .house-roof{position:absolute;left:7%;right:7%;top:0;height:18px;background:linear-gradient(135deg,#7646d6,#46309b);clip-path:polygon(50% 0,100% 100%,0 100%);display:flex;align-items:flex-end;justify-content:center;color:#fff;font-size:14px}
-      .house-wall{position:absolute;left:10%;right:10%;top:14px;bottom:5px;border:1px solid rgba(255,255,255,.14);border-radius:7px 7px 3px 3px;background:linear-gradient(180deg,#252b45,#171b2c);display:flex;gap:9px;padding:7px 11%;align-items:center}
-      .house-door{position:relative;flex:1;height:100%;min-width:42px;border:1px solid rgba(255,255,255,.13);border-radius:5px;background:linear-gradient(180deg,#33405f,#202943);color:#aeb9d8;cursor:pointer;transition:.2s;box-shadow:inset 0 0 0 1px rgba(255,255,255,.03)}
-      .house-door:not(:disabled):hover{transform:translateY(-3px);border-color:rgba(255,255,255,.45);box-shadow:0 7px 18px rgba(120,100,255,.22)}
-      .house-door:disabled{cursor:default;opacity:.82}
-      .door-window{position:absolute;left:50%;top:20%;transform:translateX(-50%);font-size:15px}.door-knob{position:absolute;right:12%;top:58%;width:5px;height:5px;border-radius:50%;background:#f0c96a}
-      .door-safe{background:linear-gradient(180deg,#1f9d6c,#14664b)!important;border-color:#45e0a5!important;animation:doorpop .35s ease-out}.door-boom{background:linear-gradient(180deg,#c63c52,#65202e)!important;border-color:#ff6878!important;animation:boomdoor .45s ease-out}
-      .house-ground{position:absolute;left:3%;right:3%;bottom:0;height:5px;background:linear-gradient(90deg,transparent,#77659d,transparent);opacity:.7}
-      .tower-result{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:14px 22px;border-radius:16px;background:rgba(12,14,26,.86);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.14);font-weight:900;letter-spacing:.08em;z-index:10;animation:resultin .35s ease-out}.boom-result{color:#ff8794}.idle-result{color:#b8a8ff}
-      .tower-controls{display:grid;gap:10px}.tower-steps{display:flex;gap:5px;overflow:auto;padding-bottom:2px}.tower-steps span{font-size:10px;padding:5px 7px;border-radius:7px;background:rgba(255,255,255,.05);color:#8e96ad;white-space:nowrap}.tower-steps .step-done{color:#6ff0b8;background:rgba(52,211,153,.12)}.tower-steps .step-current{color:#fff;background:rgba(124,92,255,.28);box-shadow:0 0 14px rgba(124,92,255,.18)}
-      @keyframes pulsehouse{0%,100%{transform:scale(1)}50%{transform:scale(1.012)}}@keyframes doorpop{0%{transform:scale(.9)}70%{transform:scale(1.06)}100%{transform:scale(1)}}@keyframes boomdoor{0%,100%{transform:translateX(0) rotate(0)}25%{transform:translateX(-5px) rotate(-3deg)}50%{transform:translateX(5px) rotate(3deg)}75%{transform:translateX(-3px) rotate(-2deg)}}@keyframes resultin{from{opacity:0;transform:translate(-50%,-42%) scale(.85)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}@keyframes skyshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}50%{transform:translateX(7px)}75%{transform:translateX(-4px)}}@keyframes cloud{from{transform:translateX(-80px)}to{transform:translateX(900px)}}@keyframes twinkle{0%,100%{opacity:.45;transform:scale(.9)}50%{opacity:1;transform:scale(1.1)}}
-      @media(max-width:640px){.tower-stage{height:500px}.tower-building{height:470px}.house-wall{gap:5px;padding:6px 9%}.house-door{min-width:30px}.door-window{font-size:12px}.floor-number{left:0}.tower-steps span{font-size:9px;padding:4px 6px}}
-    `}</style>
+ const [bet,setBet]=useState(100),[started,setStarted]=useState(false),[floor,setFloor]=useState(0),[tower,setTower]=useState<Block[]>([]),[moving,setMoving]=useState(false),[x,setX]=useState(-75),[dir,setDir]=useState(1),[msg,setMsg]=useState('Aligne la maison avec la précédente puis appuie sur BUILD.'),[boom,setBoom]=useState(false),[bonus,setBonus]=useState<string|null>(null),[protectedNext,setProtectedNext]=useState(false),[round,setRound]=useState(0);
+ useEffect(()=>{if(!started||!moving)return;const id=window.setInterval(()=>setX(v=>{const n=v+dir*2.4;if(n>75){setDir(-1);return 75}if(n<-75){setDir(1);return -75}return n}),30);return()=>window.clearInterval(id)},[started,moving,dir]);
+ const start=()=>{const b=Math.floor(Number(bet));if(!Number.isFinite(b)||b<10){setMsg('Mise minimum : 10 coins.');return}if(!spendCoins(b)){setMsg('Coins insuffisants.');return}beginGame();setTower([{x:0,width:82}]);setFloor(0);setX(-75);setDir(1);setMoving(true);setStarted(true);setBoom(false);setBonus(null);setProtectedNext(false);setRound(r=>r+1);setMsg('🏗️ Première maison : aligne-la avec la base.')};
+ const build=()=>{if(!started||!moving)return;setMoving(false);const prev=tower[tower.length-1];const overlap=Math.min(x+41,prev.x+prev.width/2)-Math.max(x-41,prev.x-prev.width/2);if(overlap<18){if(protectedNext){setProtectedNext(false);setMsg('🧊 FROZEN FLOOR ! La chute est protégée. Continue !');setTimeout(()=>setMoving(true),450);return}setBoom(true);setTimeout(()=>setBoom(false),650);recordGameResult('Towers','loss',-bet);setStarted(false);endGame();setMsg('💥 LA TOUR S’ÉCROULE — mise perdue.');return}const width=Math.max(38,Math.min(82,overlap+8));const nx=Math.max(-41,Math.min(41,x+(prev.x-x)*.35));const next=[...tower,{x:nx,width}];setTower(next);const nextFloor=floor+1;setFloor(nextFloor);const payout=Math.floor(bet*(mults[nextFloor-1]||mults.at(-1)!));setMsg(`✓ Étage ${nextFloor} posé · ×${(payout/bet).toFixed(2)} · continue ou cashout`);if(Math.random()<0.09&&nextFloor>=2){const b=['🧊 FROZEN FLOOR','🎡 TEMPLE WHEEL','⚡ TRIPLE BUILD'][Math.floor(Math.random()*3)];setBonus(b)}else setBonus(null);if(nextFloor>=floors){addCoins(payout);recordGameResult('Towers','win',payout-bet);setStarted(false);endGame();setMsg(`🏆 TOUR TERMINÉE · +${payout.toLocaleString('fr-FR')} coins`);return}setTimeout(()=>{setX(nx>0?-75:75);setDir(nx>0?-1:1);setMoving(true)},320)};
+ const cash=()=>{if(!started)return;const payout=Math.floor(bet*(floor===0?1:mults[floor-1]));addCoins(payout);recordGameResult('Towers','win',payout-bet);setStarted(false);endGame();setMoving(false);setMsg(`💰 CASHOUT · ×${(payout/bet).toFixed(2)} · ${payout.toLocaleString('fr-FR')} coins`)};
+ const activateBonus=()=>{if(!bonus||!started)return;if(bonus.startsWith('🧊')){setProtectedNext(true);setBonus(null);setMsg('🧊 Frozen Floor activé : la prochaine chute est protégée.');return}if(bonus.startsWith('🎡')){const m=[1.15,1.35,1.6,2][Math.floor(Math.random()*4)];setBonus(null);setMsg(`🎡 Temple Wheel : bonus ×${m} sur le prochain cashout.`);setTimeout(()=>setMsg(`🎡 Bonus ×${m} obtenu · construis encore ou encaisse !`),350);return}setBonus(null);setFloor(f=>Math.min(floors,f+3));setMsg('⚡ Triple Build : +3 étages bonus sécurisés !')};
+ const current=floor===0?1:(mults[Math.min(floor-1,mults.length-1)]||1);
+ return <div className="game-panel tower-rush-game">
+  <div className="game-head"><div><h2>🏗️ Tower Rush</h2><p className="muted">Empile les maisons. Chaque étage augmente ton multiplicateur. Si la tour tombe, tu perds tout.</p></div><div className="mult">{started?`×${current.toFixed(2)}`:'BUILD'}</div></div>
+  <div className="rush-controls"><div className="betbar"><input className="field" type="number" min="10" value={bet} onChange={e=>setBet(Number(e.target.value))} disabled={started}/><button className="maxbtn" onClick={()=>setBet(getCoins())} disabled={started}>MAX</button>{!started?<button className="playbtn" onClick={start} disabled={getCoins()<10}>🏗️ Jouer</button>:<button className="cashbtn" onClick={cash}>💰 Cashout ×{current.toFixed(2)}</button>}</div></div>
+  <div className={`rush-stage ${boom?'collapse':''}`}>
+   <div className="sky"><span className="moon">☾</span><span className="cloud one">☁</span><span className="cloud two">☁</span><span className="city">▥ ▦ ▥ ▥ ▦ ▥</span></div>
+   <div className="crane"><div className="crane-top">🏗️</div><div className="crane-arm"/><div className="crane-line"/></div>
+   <div className="tower-stack">
+    {tower.map((b,i)=><div key={`${round}-${i}`} className="stack-floor" style={{width:`${b.width}%`,transform:`translateX(${b.x*.45}px)`}}><span>{i===0?'🏢':'🏠'}</span><div className="windows">▦ ▦ ▦</div></div>)}
+    {started&&moving&&<div className="falling-house" style={{transform:`translateX(${x*.45}px)`}}>🏠</div>}
+   </div>
+   {started&&<div className="rush-hud"><b>FLOOR {floor}/{floors}</b><b>×{current.toFixed(2)}</b></div>}
+   {started&&moving&&<button className="build-btn" onClick={build}>BUILD</button>}
+   {bonus&&<button className="bonus-pop" onClick={activateBonus}>{bonus}<small> CLIQUE POUR ACTIVER</small></button>}
+   {boom&&<div className="collapse-pop">💥 COLLAPSE!</div>}
   </div>
+  <div className="rush-ladder">{mults.map((m,i)=><span key={m} className={i<floor?'done':i===floor&&started?'active':''}>×{m.toFixed(2)}</span>)}</div>
+  <p className="muted">{protectedNext?'🧊 Frozen Floor prêt · la prochaine chute sera protégée.':msg}</p>
+  <style jsx>{`
+   .tower-rush-game{overflow:hidden}.rush-stage{position:relative;height:560px;margin:14px 0;border-radius:24px;overflow:hidden;background:linear-gradient(#09132b 0%,#182d58 52%,#252332 52%,#171820 100%);border:1px solid rgba(255,255,255,.12);box-shadow:inset 0 -90px 100px rgba(0,0,0,.32)}.sky{position:absolute;inset:0;background:radial-gradient(circle at 72% 16%,rgba(255,240,180,.18),transparent 7%)}.moon{position:absolute;right:9%;top:35px;color:#fff;font-size:42px;opacity:.75}.cloud{position:absolute;font-size:46px;opacity:.12;animation:cloud 16s linear infinite}.one{top:70px;left:5%}.two{top:145px;left:62%;animation-delay:-8s}.city{position:absolute;bottom:84px;left:0;right:0;text-align:center;letter-spacing:15px;color:#566074;font-size:46px;opacity:.45}.crane{position:absolute;right:4%;top:12px;width:190px;height:190px;color:#eab308;z-index:2}.crane-top{position:absolute;right:0;top:0;font-size:38px}.crane-arm{position:absolute;right:10px;top:42px;width:170px;height:7px;background:#eab308;transform:skewX(-18deg);box-shadow:0 0 8px rgba(234,179,8,.2)}.crane-line{position:absolute;right:35px;top:47px;width:2px;height:115px;background:#d4d4d8}.tower-stack{position:absolute;bottom:72px;left:50%;width:min(520px,82%);height:390px;transform:translateX(-50%);display:flex;flex-direction:column-reverse;align-items:center;justify-content:flex-start;gap:2px}.stack-floor{height:31px;min-width:120px;max-width:420px;border:1px solid rgba(255,255,255,.28);border-radius:4px;background:linear-gradient(90deg,#475569,#334155 50%,#1e293b);box-shadow:0 4px 10px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:space-between;padding:0 12px;color:#f8fafc;font-size:13px;animation:place .32s ease-out}.stack-floor span{font-size:20px}.windows{font-size:12px;color:#fbbf24;letter-spacing:4px}.falling-house{position:absolute;bottom:calc(31px + var(--stack,0px));left:50%;width:68px;height:31px;margin-left:-34px;background:linear-gradient(#64748b,#334155);border:1px solid rgba(255,255,255,.3);border-radius:4px;display:grid;place-items:center;font-size:20px;box-shadow:0 0 25px rgba(255,255,255,.15);animation:sway .8s ease-in-out infinite alternate}.rush-hud{position:absolute;left:14px;top:14px;right:14px;display:flex;justify-content:space-between;font-size:12px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);padding:9px 12px;border-radius:11px;backdrop-filter:blur(6px)}.build-btn{position:absolute;bottom:17px;left:50%;transform:translateX(-50%);border:1px solid rgba(255,255,255,.3);background:linear-gradient(180deg,#8b5cf6,#5b21b6);color:#fff;font-weight:1000;font-size:18px;padding:13px 48px;border-radius:14px;box-shadow:0 8px 30px rgba(91,33,182,.4);cursor:pointer}.build-btn:hover{transform:translateX(-50%) translateY(-2px)}.bonus-pop{position:absolute;z-index:5;left:50%;top:44%;transform:translate(-50%,-50%);border:1px solid #facc15;background:rgba(18,16,8,.94);color:#fde68a;padding:14px 20px;border-radius:15px;font-weight:900;box-shadow:0 0 35px rgba(250,204,21,.3);cursor:pointer}.bonus-pop small{display:block;font-size:9px;margin-top:4px;opacity:.7}.collapse-pop{position:absolute;z-index:8;left:50%;top:48%;transform:translate(-50%,-50%);font-size:32px;font-weight:1000;color:#ff7180;text-shadow:0 0 25px rgba(255,60,80,.7);animation:pop .55s ease-out}.rush-ladder{display:flex;gap:5px;overflow:auto;padding:0 2px 5px}.rush-ladder span{padding:5px 7px;border-radius:7px;background:rgba(255,255,255,.05);font-size:10px;color:#8f98ad;white-space:nowrap}.rush-ladder .done{color:#72f1b4;background:rgba(34,197,94,.12)}.rush-ladder .active{color:#fff;background:rgba(124,92,255,.3);box-shadow:0 0 13px rgba(124,92,255,.18)}.collapse{animation:shake .5s ease-in-out}@keyframes place{from{opacity:0;transform:translateY(-20px) scale(.94)}to{opacity:1;transform:translateY(0) scale(1)}}@keyframes sway{from{rotate:-2deg}to{rotate:2deg}}@keyframes cloud{from{translate:-60px}to{translate:700px}}@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(4px)}}@keyframes pop{from{opacity:0;scale:.7}to{opacity:1;scale:1}}@media(max-width:640px){.rush-stage{height:500px}.crane{transform:scale(.7);transform-origin:top right}.tower-stack{width:92%;height:340px}.city{font-size:30px;letter-spacing:5px}.build-btn{bottom:13px}.stack-floor{min-width:90px}}
+  `}</style>
+ </div>
 }
