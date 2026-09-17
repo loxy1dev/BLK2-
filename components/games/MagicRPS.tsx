@@ -20,16 +20,16 @@ export function MagicRPS(){
   window.setTimeout(()=>{
    setEnemy(result);setMessage('⚡ La main magique révèle son choix !');
    window.setTimeout(()=>{
-    // The player's choice is always the reference for the result.
+    // Requested inverted outcome: a normal RPS win is counted as a loss, and vice versa.
     if(pick===result){
-      // Draw = return exactly the original stake. No profit, no loss.
+      // Draw always returns exactly the original stake.
       addCoins(amount);setMessage(`🤝 ÉGALITÉ — ${amount} coins remboursés.`);
     }else if(beats(pick,result)){
-      // Player wins: stake was already removed, so return 2x the stake.
-      const payout=amount*2;addCoins(payout);recordGameResult('Magic RPS','win',amount);setMessage(`🏆 GAGNÉ — ${payout} coins récupérés (+${amount})`);
+      // Normal RPS win => requested game loss.
+      recordGameResult('Magic RPS','loss',-amount);setMessage('💥 PERDU — la main magique te récompense ? Non, selon le mode inversé tu perds.');
     }else{
-      // Player loses: stake stays lost and nothing is added back.
-      recordGameResult('Magic RPS','loss',-amount);setMessage('💥 PERDU — la main magique gagne.');
+      // Normal RPS loss => requested game win, with 2x total return.
+      const payout=amount*2;addCoins(payout);recordGameResult('Magic RPS','win',amount);setMessage(`🏆 GAGNÉ — ${payout} coins récupérés (+${amount})`);
     }
     setCoins(getCoins());setBusy(false);
    },650);
